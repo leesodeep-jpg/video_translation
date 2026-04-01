@@ -75,9 +75,13 @@ with col_mid:
                 # Bước 1: Tải video
                 st.write("📥 Đang tải video từ YouTube...")
                 if os.path.exists("video.mp4"): os.remove("video.mp4")
-                ydl_opts = {'format': 'best[ext=mp4]', 'outtmpl': 'video.mp4', 'quiet': True}
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl: ydl.download([url])
-
+                ydl_opts = {
+                    'format': 'best[ext=mp4]', 
+                    'outtmpl': 'video.mp4', 
+                    'quiet': True,
+                    'nocheckcertificate': True, # Thêm dòng này
+                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' # Giả danh trình duyệt
+}
                 # Bước 2: Whisper phân tích
                 st.write("🧠 AI Whisper đang nghe tiếng Nhật...")
                 model = WhisperModel(model_size, device="cpu", compute_type="int8")

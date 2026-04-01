@@ -5,16 +5,18 @@ import google.generativeai as genai
 import os
 import re
 
-# 1. CẤU HÌNH TRANG (Phải nằm ở dòng đầu tiên)
+# 1. CẤU HÌNH TRANG (Dòng đầu tiên)
 st.set_page_config(page_title="AI Video Translator", page_icon="🎬", layout="wide")
 
-# 2. CẤU HÌNH GEMINI AI
-# Ngọc nhớ giữ kỹ key này, hoặc dùng biến môi trường nếu chia sẻ công khai
-api_key = st.secrets["GEMINI_API_KEY"]
-genai.configure(api_key=api_key)
-model_gemini = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+# 2. CẤU HÌNH GEMINI AI (Lấy từ Secrets)
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=api_key)
+    model_gemini = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+except:
+    st.error("Chưa cấu hình API Key trong phần Secrets!")
 
-# 3. CÁC HÀM HỖ TRỢ XỬ LÝ
+# 3. CÁC HÀM HỖ TRỢ (Định nghĩa trước khi dùng)
 def format_time(seconds):
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
@@ -23,13 +25,12 @@ def format_time(seconds):
     return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
 
 def translate_smart(text_ja):
-    prompt = f"Dịch câu tiếng Nhật sau sang tiếng Việt giao tiếp tự nhiên, phù hợp ngữ cảnh video đời thường: {text_ja}. Chỉ trả về nội dung đã dịch, không giải thích gì thêm."
+    prompt = f"Dịch câu tiếng Nhật sau sang tiếng Việt giao tiếp tự nhiên: {text_ja}. Chỉ trả về nội dung dịch."
     try:
         response = model_gemini.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
-        # Dòng này sẽ in lỗi chi tiết ra Terminal đen của bạn
-        print(f"❌ LỖI GEMINI: {e}") 
+        print(f"Lỗi Gemini: {e}")
         return "Lỗi dịch thuật"
 
 def split_by_punctuation(text, start_time, end_time):
@@ -44,51 +45,64 @@ def split_by_punctuation(text, start_time, end_time):
     time_per_sentence = duration / len(temp_sentences)
     return [(start_time + i*time_per_sentence, start_time + (i+1)*time_per_sentence, s) for i, s in enumerate(temp_sentences)]
 
-# 4. GIAO DIỆN CSS CUSTOM
+# 4. GIAO DIỆN CSS
 st.markdown("""
     <style>
-    .main-title { font-size: 40px; font-weight: 800; color: #FF4B4B; text-align: center; margin-bottom: 20px; }
+    .main-title { font-size: 40px; font-weight: 800; color: #FF4B4B; text-align: center; }
     .stVideo { border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
     div.stButton > button:first-child { background-color: #FF4B4B; color: white; border-radius: 10px; width: 100%; font-weight: bold; }
     [data-testid="stSidebar"] { background-color: #0E1117; padding: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 5. BỐ CỤC SIDEBAR (Thanh điều khiển)
+# 5. BỐ CỤC SIDEBAR
 with st.sidebar:
-    st.header("import video")
+    st.header("⚙️ Nhập Video")
     url = st.text_input("🔗 Link YouTube:", placeholder="Dán link tại đây...")
-    model_size = st.selectbox("🧠 Model Whisper:", ["small", "medium"], index=1)
+    model_size = st.selectbox("🧠 Model Whisper:", ["tiny", "base", "small"], index=1)
     delay = st.slider("⏱️ Độ trễ Sub (giây):", 0.0, 1.0, 0.4)
-    st.info("💡 Mẹo: Model 'medium' dịch chuẩn nhất cho video tiếng Nhật.")
+    st.warning("⚠️ Lưu ý: Model lớn có thể làm sập server Cloud (1GB RAM).")
 
 # 6. GIAO DIỆN CHÍNH
-st.markdown('<p class="main-title">🎬 VIDEO TRANSLATOR </p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🎬 AI VIDEO TRANSLATOR</p>', unsafe_allow_html=True)
 col_l, col_mid, col_r = st.columns([1, 6, 1])
 
 with col_mid:
     if st.button("🚀 BẮT ĐẦU DỊCH VIDEO"):
         if not url:
-            st.error("link chưa được dán vào")
+            st.error("Ngọc ơi, chưa dán link kìa!")
         else:
-            with st.status("Đang xử lý...", expanded=True) as status:
-                # Bước 1: Tải video
-                st.write("📥 Đang tải video từ YouTube...")
+            with st.status("Đang thực hiện phép thuật...", expanded=True) as status:
+                # BƯỚC 1: TẢI VIDEO (Nằm trong try-except)
+                st.write("📥 Đang tải video...")
                 if os.path.exists("video.mp4"): os.remove("video.mp4")
+                
                 ydl_opts = {
-                    'format': 'best[ext=mp4]', 
-                    'outtmpl': 'video.mp4', 
+                    'format': 'best[ext=mp4]',
+                    'outtmpl': 'video.mp4',
                     'quiet': True,
-                    'nocheckcertificate': True, # Thêm dòng này
-                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' # Giả danh trình duyệt
-}
-                # Bước 2: Whisper phân tích
-                st.write("🧠 AI Whisper đang nghe tiếng Nhật...")
+                    'nocheckcertificate': True,
+                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+                
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
+                except Exception as e:
+                    st.error(f"YouTube chặn rồi Ngọc ơi! 🛑 Lỗi: {e}")
+                    st.stop()
+
+                if not os.path.exists("video.mp4"):
+                    st.error("Không tìm thấy file video sau khi tải!")
+                    st.stop()
+
+                # BƯỚC 2: WHISPER
+                st.write("🧠 AI đang nghe tiếng Nhật...")
                 model = WhisperModel(model_size, device="cpu", compute_type="int8")
                 segments, _ = model.transcribe("video.mp4", beam_size=5, language="ja", vad_filter=True)
 
-                # Bước 3: Gemini dịch
-                st.write("🌐 Gemini AI đang dịch thuật thông minh...")
+                # BƯỚC 3: GEMINI
+                st.write("🌐 Gemini đang dịch sang tiếng Việt...")
                 with open("phude_vi.srt", "w", encoding="utf-8") as f:
                     idx = 1
                     for seg in segments:
@@ -98,14 +112,14 @@ with col_mid:
                             f.write(f"{idx}\n{format_time(p_s)} --> {format_time(p_e)}\n{p_t}\n\n")
                             idx += 1
 
-                # Bước 4: Ghép sub
-                st.write("🎬 Đang tạo video chất lượng cao...")
-                style = "Fontname=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2"
+                # BƯỚC 4: GHÉP SUB
+                st.write("🎬 Đang đóng gói video...")
+                style = "Fontname=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2"
                 os.system(f'ffmpeg -i video.mp4 -vf "subtitles=phude_vi.srt:force_style=\'{style}\'" result.mp4 -y -loglevel error')
                 
                 status.update(label="Xong rồi nè Ngọc!", state="complete")
 
-            st.success("Đã hoàn thành siêu phẩm!")
+            st.success("Đã hoàn thành!")
             st.video("result.mp4")
             with open("result.mp4", "rb") as file:
-                st.download_button(label="Tải video về máy", data=file, file_name="video_dich.mp4", mime="video/mp4")
+                st.download_button(label="💾 Tải video về máy", data=file, file_name="video_dich.mp4", mime="video/mp4")

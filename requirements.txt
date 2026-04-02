@@ -2,3 +2,4 @@ streamlit
 yt-dlp
 faster-whisper
 google-generativeai
+cookies.txt

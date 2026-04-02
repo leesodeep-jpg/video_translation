@@ -78,15 +78,11 @@ with col_mid:
                 if os.path.exists("video.mp4"): os.remove("video.mp4")
                 
                 ydl_opts = {
-                    'format': 'best[ext=mp4]',
-                    'outtmpl': 'video.mp4',
-                    'quiet': True,
-                    'nocheckcertificate': True,
-                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
-                
-                try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            'format': 'best',
+                            'cookiefile': 'cookies.txt', # Chỉ đường dẫn đến file bạn vừa tạo
+                                }
+
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([url])
                 except Exception as e:
                     st.error(f"YouTube chặn rồi Ngọc ơi! 🛑 Lỗi: {e}")
